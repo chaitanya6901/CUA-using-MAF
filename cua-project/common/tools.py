@@ -56,94 +56,15 @@ def _save_dlg():
         time.sleep(0.3)
     raise RuntimeError("Save As dialog not found")
 
-# --- Original API (kept for backward compatibility with agent.py) ---
-
-def open_notepad(path: str = "notepad.exe") -> str:
-    """Launch Notepad and return its window title."""
+def launch_app(path: str = "notepad.exe") -> str:
+    """Launch Notepad. Returns window title."""
     with _LOCK:
+        _ensure()
         w = _ensure()
         return w.window_text()
 
-def type_text(text: str) -> str:
-    """Type text into Notepad (replaces existing content)."""
-    with _LOCK:
-        global _LAST_TEXT
-        w = _ensure()
-        w.set_focus()
-        time.sleep(0.2)
-        send_keys("^a{BS}")
-        pyperclip.copy(text)
-        send_keys("^v")
-        _LAST_TEXT = text
-        return "typed text"
-
-def save_file(filename: str) -> str:
-    """Save Notepad content to a file (triggers Ctrl+S, fills Save As dialog)."""
-    with _LOCK:
-        w = _ensure()
-        w.set_focus()
-        if _LAST_TEXT:
-            send_keys("^a{BS}")
-            pyperclip.copy(_LAST_TEXT)
-            send_keys("^v")
-        send_keys("^s")
-        time.sleep(0.5)
-        dlg = _save_dlg()
-        time.sleep(0.3)
-        send_keys("^a{BS}")
-        pyperclip.copy(filename)
-        send_keys("^v")
-        time.sleep(0.3)
-        dlg.child_window(title="Save", control_type="Button").click_input()
-        time.sleep(0.5)
-        for _ in range(5):
-            confirm = None
-            for cw in Desktop(backend="uia").windows():
-                t = ""
-                try:
-                    t = cw.window_text()
-                except Exception:
-                    pass
-                if "already exists" in t or "Confirm Save As" in t:
-                    confirm = cw
-                    break
-            if confirm is not None:
-                for child in confirm.descendants():
-                    t = ""
-                    try:
-                        t = child.window_text()
-                    except Exception:
-                        pass
-                    if t.lower() in ("yes", "replace"):
-                        child.click_input()
-                        time.sleep(0.3)
-                        break
-                break
-            time.sleep(0.3)
-        os.system("taskkill /f /im notepad.exe >nul 2>&1")
-        time.sleep(0.3)
-        global _NP_HANDLE
-        _NP_HANDLE = None
-        return f"saved as {filename}"
-
-def close_notepad() -> str:
-    """Close Notepad."""
-    with _LOCK:
-        os.system("taskkill /f /im notepad.exe >nul 2>&1")
-        global _NP_HANDLE
-        _NP_HANDLE = None
-        return "closed Notepad"
-
-# --- Agent-news API (no-handle versions that use global state) ---
-
-def launch_app(path: str = "notepad.exe") -> str:
-    """Launch Notepad. Returns confirmation string."""
-    with _LOCK:
-        _ensure()
-        return "Notepad launched"
-
-def set_text(text: str) -> str:
-    """Replace Notepad content with the given text (clipboard-based, no corruption)."""
+def set_text(window_title: str, text: str) -> str:
+    """Replace Notepad content with the given text."""
     with _LOCK:
         global _LAST_TEXT
         w = _ensure()
@@ -155,7 +76,7 @@ def set_text(text: str) -> str:
         _LAST_TEXT = text
         return "set text"
 
-def trigger_save() -> str:
+def trigger_save(window_title: str = "") -> str:
     """Send Ctrl+Shift+S to Notepad to open the Save As dialog (Win11)."""
     with _LOCK:
         w = _ensure()
@@ -214,8 +135,8 @@ def close_window() -> str:
         _NP_HANDLE = None
         return "closed Notepad"
 
-def list_controls() -> str:
-    """List UI controls in the Notepad window for debugging."""
+def list_controls(dialog_name: str = "") -> str:
+    """List UI controls in a window for debugging."""
     with _LOCK:
         w = _ensure()
         lines = []
